@@ -280,8 +280,12 @@ mod tests {
     #[test]
     fn test_instructions() {
         let mut expected = ArrayVec::<Instruction, 2>::new();
-        expected.push(Instruction::Left(20));
-        expected.push(Instruction::Right(30));
+        expected
+            .push(Instruction::Left(20))
+            .expect("enough capacity");
+        expected
+            .push(Instruction::Right(30))
+            .expect("enough capacity");
 
         assert_eq!(
             parse_input::<2>(
