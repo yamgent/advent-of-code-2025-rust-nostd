@@ -5,7 +5,23 @@ use core::{fmt, mem::MaybeUninit, str::FromStr};
 
 const ACTUAL_INPUT: &str = include_str!("../../../actual_inputs/2025/01/input.txt");
 
+#[derive(Debug)]
 struct ArrayCapMaxed;
+
+#[must_use = "this `ArrayVecResult` may be an `Err` variant, which should be handled"]
+enum ArrayVecResult<T> {
+    Ok(T),
+    Err(ArrayCapMaxed),
+}
+
+impl<T> ArrayVecResult<T> {
+    fn expect(self, msg: &str) -> T {
+        match self {
+            ArrayVecResult::Ok(item) => item,
+            ArrayVecResult::Err(array_cap_maxed) => panic!("{}: {:?}", msg, array_cap_maxed),
+        }
+    }
+}
 
 struct ArrayVec<T, const N: usize> {
     buffer: [T; N],
@@ -42,42 +58,40 @@ impl<T, const N: usize> ArrayVec<T, N> {
         Self { buffer, used: 0 }
     }
 
-    fn push(&mut self, value: T) -> Result<(), ArrayCapMaxed> {
+    fn push(&mut self, value: T) -> ArrayVecResult<()> {
         if self.used >= self.buffer.len() {
-            Err(ArrayCapMaxed)
+            ArrayVecResult::Err(ArrayCapMaxed)
         } else {
             self.buffer[self.used] = value;
             self.used += 1;
-            Ok(())
+            ArrayVecResult::Ok(())
         }
     }
 }
 
 // TODO: Unlike Rust's RawVec, we haven't found a way to do T::IS_ZST, so we cannot
 // use ?Sized yet. Work on removing this constraint later
-impl<T, const N: usize> FromIterator<T> for ArrayVec<T, N> {
+impl<T, const N: usize> FromIterator<T> for ArrayVecResult<ArrayVec<T, N>> {
     fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
-        let (buffer, used) = iter.into_iter().fold(
-            ([const { MaybeUninit::uninit() }; N], 0),
-            |(mut buffer, mut used), item| {
-                if used >= buffer.len() {
-                    // TODO: Need to handle this properly, cannot panic on OOM
-                    todo!()
-                }
+        let mut buffer = [const { MaybeUninit::uninit() }; N];
+        let mut used = 0;
 
-                buffer[used].write(item);
-                used += 1;
-                (buffer, used)
-            },
-        );
+        for item in iter.into_iter() {
+            if used >= buffer.len() {
+                return Self::Err(ArrayCapMaxed);
+            }
 
-        Self {
+            buffer[used].write(item);
+            used += 1;
+        }
+
+        Self::Ok(ArrayVec::<_, _> {
             // SAFETY: 0..used are initialized. used..buf.len() are not, but
             // the ArrayVec API will ensure that they are initialized if the
             // vec grows and they start getting used.
             buffer: unsafe { MaybeUninit::array_assume_init(buffer) },
             used,
-        }
+        })
     }
 }
 
@@ -136,30 +150,25 @@ struct ArrayString<const N: usize> {
     buffer: ArrayVec<u8, N>,
 }
 
-impl<const N: usize> FromIterator<char> for ArrayString<N> {
+impl<const N: usize> FromIterator<char> for ArrayVecResult<ArrayString<N>> {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
-        let (buffer, used) = iter
-            .into_iter()
-            .fold(([0; N], 0), |(mut buffer, mut used), ch| {
-                let mut ch_buffer = [0; 4];
-                ch.encode_utf8(&mut ch_buffer)
-                    .as_bytes()
-                    .iter()
-                    .for_each(|byte| {
-                        if used >= buffer.len() {
-                            // TODO: Need to handle this properly, cannot panic on OOM
-                            todo!()
-                        }
-                        buffer[used] = *byte;
-                        used += 1;
-                    });
+        let mut buffer = [0; N];
+        let mut used = 0;
 
-                (buffer, used)
-            });
-
-        Self {
-            buffer: ArrayVec { buffer, used },
+        for ch in iter.into_iter() {
+            let mut ch_buffer = [0; 4];
+            for byte in ch.encode_utf8(&mut ch_buffer).as_bytes().iter() {
+                if used >= buffer.len() {
+                    return Self::Err(ArrayCapMaxed);
+                }
+                buffer[used] = *byte;
+                used += 1;
+            }
         }
+
+        Self::Ok(ArrayString::<_> {
+            buffer: ArrayVec { buffer, used },
+        })
     }
 }
 
@@ -183,7 +192,8 @@ impl Instruction {
         let amount = line
             .chars()
             .skip(1)
-            .collect::<ArrayString<20>>()
+            .collect::<ArrayVecResult<ArrayString<20>>>()
+            .expect("enough capacity")
             .parse()
             .expect("a number");
 
@@ -198,7 +208,12 @@ impl Instruction {
 }
 
 fn parse_input<const N: usize>(input: &str) -> ArrayVec<Instruction, N> {
-    input.trim().lines().map(Instruction::parse).collect()
+    input
+        .trim()
+        .lines()
+        .map(Instruction::parse)
+        .collect::<ArrayVecResult<_>>()
+        .expect("enough capacity")
 }
 
 const START_NUMBER: i32 = 50;
