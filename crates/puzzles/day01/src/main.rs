@@ -3,7 +3,7 @@
 
 use core::{fmt, mem::MaybeUninit, str::FromStr};
 
-const ACTUAL_INPUT: &str = include_str!("../../../actual_inputs/2025/01/input.txt");
+const ACTUAL_INPUT: &str = include_str!("../../../../actual_inputs/2025/01/input.txt");
 
 #[derive(Debug)]
 struct ArrayCapMaxed;
