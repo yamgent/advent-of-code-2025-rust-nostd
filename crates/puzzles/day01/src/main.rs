@@ -123,18 +123,11 @@ impl<T, const N: usize> IntoIterator for ArrayVec<T, N> {
     type IntoIter = ArrayVecIntoIter<T, N>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let buffer = self
-            .buffer
-            .into_iter()
-            .enumerate()
-            .filter(|(idx, _)| *idx < self.used)
-            .fold(
-                [const { MaybeUninit::uninit() }; N],
-                |mut buffer, (idx, item)| {
-                    buffer[idx].write(Some(item));
-                    buffer
-                },
-            );
+        let mut buffer = [const { MaybeUninit::uninit() }; N];
+
+        for (idx, item) in self.buffer.into_iter().enumerate().take(self.used) {
+            buffer[idx].write(Some(item));
+        }
 
         Self::IntoIter {
             // SAFETY: 0..used is initialized, and ArrayVecIntoIter will never access
