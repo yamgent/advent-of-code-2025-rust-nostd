@@ -1,0 +1,8 @@
+[package]
+name = "aoc_2025"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+union-find = "0.4.3"
+z3 = "0.19.5"
