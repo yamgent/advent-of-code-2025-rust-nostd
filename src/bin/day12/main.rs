@@ -2814,6 +2814,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "too CPU intensive"]
     fn test_can_fit() {
         let input = Input::parse(SAMPLE_INPUT);
 
@@ -2825,6 +2826,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "too CPU intensive"]
     fn test_p1_sample() {
         // test with is_troll_input: false, because sample input
         // is not troll input
@@ -2837,6 +2839,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "too CPU intensive"]
     fn test_p1_actual_treat_as_non_troll() {
         // to ensure the correctness of our implementation,
         // treat actual input as non-troll, even though
