@@ -23,18 +23,18 @@ impl<T> ArrayVecResult<T> {
     }
 }
 
-struct ArrayVec<T, const N: usize> {
-    buffer: [T; N],
+struct ArrayVec<T, const CAP: usize> {
+    buffer: [T; CAP],
     used: usize,
 }
 
-impl<T, const N: usize> AsRef<[T]> for ArrayVec<T, N> {
+impl<T, const CAP: usize> AsRef<[T]> for ArrayVec<T, CAP> {
     fn as_ref(&self) -> &[T] {
         &self.buffer[..self.used]
     }
 }
 
-impl<T: fmt::Debug, const N: usize> fmt::Debug for ArrayVec<T, N> {
+impl<T: fmt::Debug, const CAP: usize> fmt::Debug for ArrayVec<T, CAP> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ArrayVec")
             .field("buffer", &&self.buffer[..self.used])
@@ -43,15 +43,15 @@ impl<T: fmt::Debug, const N: usize> fmt::Debug for ArrayVec<T, N> {
     }
 }
 
-impl<T: PartialEq, const N: usize> PartialEq for ArrayVec<T, N> {
+impl<T: PartialEq, const CAP: usize> PartialEq for ArrayVec<T, CAP> {
     fn eq(&self, other: &Self) -> bool {
         self.used == other.used && self.buffer[..self.used] == other.buffer[..other.used]
     }
 }
 
-impl<T, const N: usize> ArrayVec<T, N> {
+impl<T, const CAP: usize> ArrayVec<T, CAP> {
     fn new() -> Self {
-        let buffer = [const { MaybeUninit::uninit() }; N];
+        let buffer = [const { MaybeUninit::uninit() }; CAP];
         // SAFETY: ArrayVec API will ensure that uninitialized elements are never accessed.
         let buffer = unsafe { MaybeUninit::array_assume_init(buffer) };
 
@@ -71,9 +71,9 @@ impl<T, const N: usize> ArrayVec<T, N> {
 
 // TODO: Unlike Rust's RawVec, we haven't found a way to do T::IS_ZST, so we cannot
 // use ?Sized yet. Work on removing this constraint later
-impl<T, const N: usize> FromIterator<T> for ArrayVecResult<ArrayVec<T, N>> {
+impl<T, const CAP: usize> FromIterator<T> for ArrayVecResult<ArrayVec<T, CAP>> {
     fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
-        let mut buffer = [const { MaybeUninit::uninit() }; N];
+        let mut buffer = [const { MaybeUninit::uninit() }; CAP];
         let mut used = 0;
 
         for item in iter.into_iter() {
@@ -95,13 +95,13 @@ impl<T, const N: usize> FromIterator<T> for ArrayVecResult<ArrayVec<T, N>> {
     }
 }
 
-struct ArrayVecIntoIter<T, const N: usize> {
-    buffer: [Option<T>; N],
+struct ArrayVecIntoIter<T, const CAP: usize> {
+    buffer: [Option<T>; CAP],
     used: usize,
     current: usize,
 }
 
-impl<T, const N: usize> Iterator for ArrayVecIntoIter<T, N> {
+impl<T, const CAP: usize> Iterator for ArrayVecIntoIter<T, CAP> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -117,14 +117,14 @@ impl<T, const N: usize> Iterator for ArrayVecIntoIter<T, N> {
     }
 }
 
-impl<T, const N: usize> IntoIterator for ArrayVec<T, N> {
+impl<T, const CAP: usize> IntoIterator for ArrayVec<T, CAP> {
     type Item = T;
 
-    type IntoIter = ArrayVecIntoIter<T, N>;
+    type IntoIter = ArrayVecIntoIter<T, CAP>;
 
     fn into_iter(self) -> Self::IntoIter {
         let buffer = self.buffer.into_iter().enumerate().take(self.used).fold(
-            [const { MaybeUninit::uninit() }; N],
+            [const { MaybeUninit::uninit() }; CAP],
             |mut buffer, (idx, item)| {
                 buffer[idx].write(Some(item));
                 buffer
@@ -141,13 +141,13 @@ impl<T, const N: usize> IntoIterator for ArrayVec<T, N> {
     }
 }
 
-struct ArrayString<const N: usize> {
-    buffer: ArrayVec<u8, N>,
+struct ArrayString<const CAP: usize> {
+    buffer: ArrayVec<u8, CAP>,
 }
 
-impl<const N: usize> FromIterator<char> for ArrayVecResult<ArrayString<N>> {
+impl<const CAP: usize> FromIterator<char> for ArrayVecResult<ArrayString<CAP>> {
     fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
-        let mut buffer = [0; N];
+        let mut buffer = [0; CAP];
         let mut used = 0;
 
         for ch in iter.into_iter() {
@@ -167,7 +167,7 @@ impl<const N: usize> FromIterator<char> for ArrayVecResult<ArrayString<N>> {
     }
 }
 
-impl<const N: usize> ArrayString<N> {
+impl<const CAP: usize> ArrayString<CAP> {
     fn parse<F: FromStr>(&self) -> Result<F, F::Err> {
         // SAFETY: ArrayString is maintained to be utf8 compatible
         let str_ref = unsafe { str::from_utf8_unchecked(AsRef::<[u8]>::as_ref(&self.buffer)) };
@@ -202,7 +202,7 @@ impl Instruction {
     }
 }
 
-fn parse_input<const N: usize>(input: &str) -> ArrayVec<Instruction, N> {
+fn parse_input<const CAP: usize>(input: &str) -> ArrayVec<Instruction, CAP> {
     input
         .trim()
         .lines()
