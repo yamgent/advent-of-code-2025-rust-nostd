@@ -8,21 +8,6 @@ const ACTUAL_INPUT: &str = include_str!("../../../../actual_inputs/2025/01/input
 #[derive(Debug)]
 struct ArrayCapMaxed;
 
-#[must_use = "this `ArrayVecResult` may be an `Err` variant, which should be handled"]
-enum ArrayVecResult<T> {
-    Ok(T),
-    Err(ArrayCapMaxed),
-}
-
-impl<T> ArrayVecResult<T> {
-    fn expect(self, msg: &str) -> T {
-        match self {
-            ArrayVecResult::Ok(item) => item,
-            ArrayVecResult::Err(array_cap_maxed) => panic!("{}: {:?}", msg, array_cap_maxed),
-        }
-    }
-}
-
 struct ArrayVec<T, const CAP: usize> {
     buffer: [T; CAP],
     used: usize,
@@ -58,34 +43,49 @@ impl<T, const CAP: usize> ArrayVec<T, CAP> {
         Self { buffer, used: 0 }
     }
 
-    fn push(&mut self, value: T) -> ArrayVecResult<()> {
+    fn push(&mut self, value: T) -> Result<(), ArrayCapMaxed> {
         if self.used >= self.buffer.len() {
-            ArrayVecResult::Err(ArrayCapMaxed)
+            Err(ArrayCapMaxed)
         } else {
             self.buffer[self.used] = value;
             self.used += 1;
-            ArrayVecResult::Ok(())
+            Ok(())
         }
     }
 }
 
-// TODO: Unlike Rust's RawVec, we haven't found a way to do T::IS_ZST, so we cannot
-// use ?Sized yet. Work on removing this constraint later
-impl<T, const CAP: usize> FromIterator<T> for ArrayVecResult<ArrayVec<T, CAP>> {
-    fn from_iter<U: IntoIterator<Item = T>>(iter: U) -> Self {
+trait TryCollectArrayVec<const CAP: usize>: Iterator {
+    type CollectItem;
+
+    fn try_collect_array_vec(self) -> Result<ArrayVec<Self::CollectItem, CAP>, ArrayCapMaxed>
+    where
+        Self: Sized;
+}
+
+impl<T, U, const CAP: usize> TryCollectArrayVec<CAP> for T
+where
+    T: Iterator<Item = U>,
+    U: Sized,
+{
+    type CollectItem = U;
+
+    fn try_collect_array_vec(self) -> Result<ArrayVec<Self::CollectItem, CAP>, ArrayCapMaxed>
+    where
+        Self: Sized,
+    {
         let mut buffer = [const { MaybeUninit::uninit() }; CAP];
         let mut used = 0;
 
-        for item in iter.into_iter() {
+        for item in self.into_iter() {
             if used >= buffer.len() {
-                return Self::Err(ArrayCapMaxed);
+                return Err(ArrayCapMaxed);
             }
 
             buffer[used].write(item);
             used += 1;
         }
 
-        Self::Ok(ArrayVec::<_, _> {
+        Ok(ArrayVec::<_, _> {
             // SAFETY: 0..used are initialized. used..buf.len() are not, but
             // the ArrayVec API will ensure that they are initialized if the
             // vec grows and they start getting used.
@@ -145,23 +145,35 @@ struct ArrayString<const CAP: usize> {
     buffer: ArrayVec<u8, CAP>,
 }
 
-impl<const CAP: usize> FromIterator<char> for ArrayVecResult<ArrayString<CAP>> {
-    fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
+trait TryCollectArrayString<const CAP: usize>: Iterator {
+    fn try_collect_array_string(self) -> Result<ArrayString<CAP>, ArrayCapMaxed>
+    where
+        Self: Sized;
+}
+
+impl<T, const CAP: usize> TryCollectArrayString<CAP> for T
+where
+    T: Iterator<Item = char>,
+{
+    fn try_collect_array_string(self) -> Result<ArrayString<CAP>, ArrayCapMaxed>
+    where
+        Self: Sized,
+    {
         let mut buffer = [0; CAP];
         let mut used = 0;
 
-        for ch in iter.into_iter() {
+        for ch in self.into_iter() {
             let mut ch_buffer = [0; 4];
             for byte in ch.encode_utf8(&mut ch_buffer).as_bytes().iter() {
                 if used >= buffer.len() {
-                    return Self::Err(ArrayCapMaxed);
+                    return Err(ArrayCapMaxed);
                 }
                 buffer[used] = *byte;
                 used += 1;
             }
         }
 
-        Self::Ok(ArrayString::<_> {
+        Ok(ArrayString::<_> {
             buffer: ArrayVec { buffer, used },
         })
     }
@@ -184,10 +196,7 @@ enum Instruction {
 impl Instruction {
     fn parse(line: &str) -> Self {
         let direction = line.chars().next().expect("a character");
-        let amount = line
-            .chars()
-            .skip(1)
-            .collect::<ArrayVecResult<ArrayString<20>>>()
+        let amount = TryCollectArrayString::<20>::try_collect_array_string(line.chars().skip(1))
             .expect("enough capacity")
             .parse()
             .expect("a number");
@@ -207,7 +216,7 @@ fn parse_input<const CAP: usize>(input: &str) -> ArrayVec<Instruction, CAP> {
         .trim()
         .lines()
         .map(Instruction::parse)
-        .collect::<ArrayVecResult<_>>()
+        .try_collect_array_vec()
         .expect("enough capacity")
 }
 
